@@ -108,10 +108,10 @@ app.post('/send', async (req, res) => {
     return res.json({ success: true, message: 'Email sent successfully' });
   } catch (err) {
     console.error('❌ Failed to send email:', err.message);
-    return res.status(500).json({
-      success: false,
-      error: 'Failed to send email. Please try again later.',
-    });
+ return res.status(500).json({
+  success: false,
+  error: err.message,   // shows real SMTP error
+});
   }
 });
 
