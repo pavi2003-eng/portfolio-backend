@@ -1,30 +1,48 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
 const app = express();
 
 app.use(express.json());
 app.use(cors());
 
-// ---------- Validate environment ----------
-if (!process.env.RESEND_API_KEY) {
-  console.error('❌ Missing RESEND_API_KEY environment variable');
-  process.exit(1);
-}
+// ---------- Your Gmail credentials (hardcoded for quick fix) ----------
+const GMAIL_USER = 'paviv592003@gmail.com';
+const GMAIL_APP_PASS = 'ckiq xjiq vnan itmz';   // remove spaces: ckiqxjiqvnanitmz
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Remove spaces from the app password (just in case)
+const cleanPass = GMAIL_APP_PASS.replace(/\s/g, '');
+
+// Create transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: GMAIL_USER,
+    pass: cleanPass,
+  },
+});
+
+// Verify connection at startup
+transporter.verify((error) => {
+  if (error) {
+    console.error('❌ Transporter error:', error.message);
+  } else {
+    console.log('✅ Ready to send emails via Gmail');
+  }
+});
 
 // Health check
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Contact API is running (Resend)' });
+  res.json({ status: 'ok', message: 'Contact API with Gmail SMTP' });
 });
 
 // ---------- POST /send ----------
 app.post('/send', async (req, res) => {
   const { from_name, from_email, subject, message } = req.body;
 
+  // Validation
   if (!from_name || !from_email || !message) {
     return res.status(400).json({ success: false, error: 'Missing fields' });
   }
@@ -34,10 +52,10 @@ app.post('/send', async (req, res) => {
   }
 
   try {
-    await resend.emails.send({
-      from: 'Portfolio Contact <onboarding@resend.dev>', // Must be verified in Resend
-      to: 'paviv592003@gmail.com',
-      reply_to: from_email,
+    await transporter.sendMail({
+      from: `"Portfolio Contact" <${GMAIL_USER}>`,
+      to: GMAIL_USER,                         // sends to your own Gmail
+      replyTo: from_email,
       subject: subject ? `[Portfolio] ${subject}` : '[Portfolio] New Contact Request',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 8px;">
@@ -56,10 +74,10 @@ app.post('/send', async (req, res) => {
       `,
     });
 
-    console.log(`✅ Email sent via Resend from ${from_email}`);
+    console.log(`✅ Email sent from ${from_email}`);
     return res.json({ success: true, message: 'Email sent' });
   } catch (err) {
-    console.error('❌ Resend error:', err.message);
+    console.error('❌ Send error:', err.message);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
