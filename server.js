@@ -1,132 +1,77 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Portfolio Contact API – Send emails via Gmail SMTP
-// ─────────────────────────────────────────────────────────────────────────────
-
 require('dotenv').config();
 const express = require('express');
-const nodemailer = require('nodemailer');
 const cors = require('cors');
+const { Resend } = require('resend');
 
 const app = express();
 
-// ---------- Middleware ----------
 app.use(express.json());
+app.use(cors());
 
-// CORS: allow only your GitHub Pages domain (change if needed)
-const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://pavi2003-eng.github.io';
-app.use(cors());            // allows all origins by default
-
-// ---------- Validate environment variables ----------
-const requiredEnv = ['GMAIL_USER', 'GMAIL_APP_PASS'];
-for (const env of requiredEnv) {
-  if (!process.env[env]) {
-    console.error(`❌ Missing environment variable: ${env}`);
-    process.exit(1);
-  }
+// ---------- Validate environment ----------
+if (!process.env.RESEND_API_KEY) {
+  console.error('❌ Missing RESEND_API_KEY environment variable');
+  process.exit(1);
 }
 
-// ---------- Gmail transporter ----------
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASS,
-  },
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify connection on startup
-transporter.verify((err) => {
-  if (err) {
-    console.error('❌ Email transporter error:', err.message);
-  } else {
-    console.log('✅ Email transporter ready');
-  }
-});
-
-// ---------- Health check ----------
+// Health check
 app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Contact API is running' });
+  res.json({ status: 'ok', message: 'Contact API is running (Resend)' });
 });
 
-// ---------- POST /send – receive contact form ----------
+// ---------- POST /send ----------
 app.post('/send', async (req, res) => {
   const { from_name, from_email, subject, message } = req.body;
 
-  // Basic validation
   if (!from_name || !from_email || !message) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing required fields: from_name, from_email, message',
-    });
+    return res.status(400).json({ success: false, error: 'Missing fields' });
   }
-
-  // Email format check
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(from_email)) {
-    return res.status(400).json({ success: false, error: 'Invalid email address' });
+    return res.status(400).json({ success: false, error: 'Invalid email' });
   }
 
   try {
-    await transporter.sendMail({
-      from: `"Portfolio Contact" <${process.env.GMAIL_USER}>`,
-      to: process.env.GMAIL_USER,               // sends to your Gmail
-      replyTo: from_email,                      // reply goes to the visitor
+    await resend.emails.send({
+      from: 'Portfolio Contact <onboarding@resend.dev>', // Must be verified in Resend
+      to: 'paviv592003@gmail.com',
+      reply_to: from_email,
       subject: subject ? `[Portfolio] ${subject}` : '[Portfolio] New Contact Request',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #f9f9f9; border-radius: 8px;">
-          <h2 style="color: #6366f1; margin-bottom: 4px;">📬 New Portfolio Message</h2>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-          <table style="width: 100%; border-collapse: collapse;">
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; color: #374151; width: 90px;">Name</td>
-              <td style="padding: 8px 0; color: #111827;">${escapeHtml(from_name)}</td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; color: #374151;">Email</td>
-              <td style="padding: 8px 0;">
-                <a href="mailto:${escapeHtml(from_email)}" style="color: #6366f1;">${escapeHtml(from_email)}</a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding: 8px 0; font-weight: bold; color: #374151;">Subject</td>
-              <td style="padding: 8px 0; color: #111827;">${escapeHtml(subject || '—')}</td>
-            </tr>
-           </table>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 16px 0;" />
-          <h3 style="color: #374151; margin-bottom: 8px;">Message</h3>
-          <div style="background: #ffffff; padding: 16px; border-radius: 6px; border-left: 4px solid #6366f1; color: #1f2937; line-height: 1.7;">
+          <h2 style="color: #6366f1;">📬 New Portfolio Message</h2>
+          <hr />
+          <p><strong>Name:</strong> ${escapeHtml(from_name)}</p>
+          <p><strong>Email:</strong> <a href="mailto:${escapeHtml(from_email)}">${escapeHtml(from_email)}</a></p>
+          <p><strong>Subject:</strong> ${escapeHtml(subject || '—')}</p>
+          <hr />
+          <h3>Message</h3>
+          <div style="background: #fff; padding: 16px; border-left: 4px solid #6366f1;">
             ${escapeHtml(message).replace(/\n/g, '<br/>')}
           </div>
-          <p style="margin-top: 24px; font-size: 12px; color: #9ca3af;">
-            Sent via your portfolio contact form. Reply directly to this email to respond to ${escapeHtml(from_name)}.
-          </p>
+          <p style="font-size: 12px; color: #666;">Sent from your portfolio contact form.</p>
         </div>
       `,
     });
 
-    console.log(`✅ Email sent from ${from_email} (${from_name})`);
-    return res.json({ success: true, message: 'Email sent successfully' });
+    console.log(`✅ Email sent via Resend from ${from_email}`);
+    return res.json({ success: true, message: 'Email sent' });
   } catch (err) {
-    console.error('❌ Failed to send email:', err.message);
- return res.status(500).json({
-  success: false,
-  error: err.message,   // shows real SMTP error
-});
+    console.error('❌ Resend error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// ---------- Helper: escape HTML to prevent injection ----------
 function escapeHtml(str = '') {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  return String(str).replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
 }
 
-// ---------- Start server ----------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🚀 Contact API running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 API running on port ${PORT}`));
