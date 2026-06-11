@@ -10,18 +10,24 @@ app.use(cors());
 const GMAIL_USER = 'paviv592003@gmail.com';
 const GMAIL_APP_PASS = 'ckiqxjiqvnanitmz';   // spaces removed
 
+// Explicit SMTP configuration (not using "service" shortcut)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: { user: GMAIL_USER, pass: GMAIL_APP_PASS }
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for 587
+  auth: {
+    user: GMAIL_USER,
+    pass: GMAIL_APP_PASS,
+  },
+  connectionTimeout: 5000,  // 5 seconds timeout
+  greetingTimeout: 5000,
+  socketTimeout: 5000,
 });
 
-transporter.verify((err) => {
-  if (err) console.error('❌ Transporter error:', err.message);
-  else console.log('✅ Gmail ready');
-});
-
+// Health check
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
+// POST /send
 app.post('/send', async (req, res) => {
   const { from_name, from_email, subject, message } = req.body;
 
@@ -30,6 +36,7 @@ app.post('/send', async (req, res) => {
   }
 
   try {
+    // Send email (no separate verify needed)
     await transporter.sendMail({
       from: `"Portfolio" <${GMAIL_USER}>`,
       to: GMAIL_USER,
@@ -41,6 +48,7 @@ app.post('/send', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('❌ Send error:', err.message);
+    // Return a proper 500 with details
     res.status(500).json({ success: false, error: err.message });
   }
 });
