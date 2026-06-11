@@ -14,13 +14,7 @@ app.use(express.json());
 
 // CORS: allow only your GitHub Pages domain (change if needed)
 const allowedOrigin = process.env.ALLOWED_ORIGIN || 'https://pavi2003-eng.github.io';
-app.use(
-  cors({
-    origin: allowedOrigin,
-    methods: ['POST', 'OPTIONS'],
-    credentials: true,
-  })
-);
+app.use(cors());            // allows all origins by default
 
 // ---------- Validate environment variables ----------
 const requiredEnv = ['GMAIL_USER', 'GMAIL_APP_PASS'];
